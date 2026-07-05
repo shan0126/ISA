@@ -1,0 +1,5 @@
+env: mpe
+
+env_args:
+  map_name: "shooting"
+  n_agents: 3

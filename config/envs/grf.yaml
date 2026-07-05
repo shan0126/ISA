@@ -1,0 +1,4 @@
+env: grf
+
+env_args:
+  map_name: "academy_pass_and_shoot_with_keeper"

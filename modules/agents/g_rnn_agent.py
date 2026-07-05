@@ -1,0 +1,84 @@
+import torch.nn as nn
+import torch.nn.functional as F
+import torch as th
+import numpy as np
+import torch.nn.init as init
+from utils.th_utils import orthogonal_init_
+from torch.nn import LayerNorm
+from torch.cuda.amp import autocast
+
+class NRNNAgent(nn.Module):
+    def __init__(self, input_shape, args):
+        super(NRNNAgent, self).__init__()
+        self.args = args
+
+        self.fc1 = nn.Linear(input_shape, args.rnn_hidden_dim)
+        self.rnn = nn.GRUCell(args.rnn_hidden_dim, args.rnn_hidden_dim)
+        self.fc2 = nn.Linear(args.rnn_hidden_dim, args.n_actions)
+
+        if getattr(args, "use_layer_norm", False):
+            self.layer_norm = LayerNorm(args.rnn_hidden_dim)
+        
+        if getattr(args, "use_orthogonal", False):
+            orthogonal_init_(self.fc1)
+            orthogonal_init_(self.fc2, gain=args.gain)
+
+    def init_hidden(self):
+        # make hidden states on same device as model
+        return self.fc1.weight.new(1, self.args.rnn_hidden_dim).zero_()
+
+    def forward(self, inputs, hidden_state):
+        # print(inputs.shape)
+        # print(hidden_state.shape)
+        # exit(0)
+        b, e = inputs.size()
+
+        inputs = inputs.view(-1, e)
+        x = F.relu(self.fc1(inputs), inplace=True)
+        h_in = hidden_state.reshape(-1, self.args.rnn_hidden_dim)
+        hh = self.rnn(x, h_in)
+
+        if getattr(self.args, "use_layer_norm", False):
+            q = self.fc2(self.layer_norm(hh))
+        else:
+            q = self.fc2(hh)
+
+        return q.view(b, -1), hh.view(b, -1)
+
+class GRNNAgent(nn.Module):
+    def __init__(self, input_shape, args):
+        super(GRNNAgent, self).__init__()
+        self.args = args
+        
+        self.n_agent = args.env_args['n_agents']
+        
+        # raise RuntimeError("lie biao ")
+
+        self.agents = [NRNNAgent(input_shape, args) for _ in range(self.n_agent)]
+
+
+    def init_hidden(self):
+        # make hidden states on same device as model
+        return self.agents[0].init_hidden()
+    
+    def parameters(self):
+        l = list()
+        for idx in range(self.n_agent):
+            l = l + list(self.agents[idx].parameters())
+        return l
+
+    def forward(self, inputs, hidden_state):
+        # print(inputs.shape)
+        b, a, e = inputs.size()
+        
+        qs = [th.zeros(b, self.args.n_actions) for _ in range(self.n_agent)]
+        hhs = [th.zeros(b, self.args.rnn_hidden_dim) for _ in range(self.n_agent)]
+        
+        for idx in range(self.n_agent):
+            qs[idx], hhs[idx] = self.agents[idx](inputs[:,idx,:], hidden_state[:,idx,:])
+        
+        q = th.stack(qs, dim=1)
+        hh = th.stack(hhs, dim=1)
+        
+
+        return q.view(b, a, -1), hh.view(b, a, -1)
