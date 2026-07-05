@@ -1,7 +1,6 @@
 # Influence Scope for Agents (ISA)
 
-This is the code for "Credit Assignment and Efficient Exploration based on Influence Scope in
-Multi-agent Reinforcement Learning".
+This is the code for "Credit Assignment and Focused Exploration for Sparse-reward Multi-agent Deep Reinforcement Learning", which has been accepted by Reinforcement Learning Conference 2026.
 
 ## Requirements
 * Python 3.8
@@ -27,6 +26,7 @@ The code can be run with the following .sh scripts for each tasks.
     sh mpe_navigation.sh
     sh mpe_shooting.sh
     sh mpe_unlock.sh
+
 
 
     
